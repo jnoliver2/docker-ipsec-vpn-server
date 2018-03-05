@@ -51,13 +51,15 @@ check_ip "$PUBLIC_IP" || exiterr "Cannot find valid public IP. Define it in your
 check_ip "$PRIVATE_IP" || PRIVATE_IP=$(ifconfig eth0 | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*')
 check_ip "$PRIVATE_IP" || exiterr "Cannot find valid private IP."
 
+echo $PRIVATE_IP
+
 # Create IPsec (Libreswan) config
 cat > /etc/ipsec.conf <<EOF
 version 2.0
 
 config setup
   nat_traversal=yes
-  virtual_private=%v4:10.0.0.0/8,%v4:192.168.0.0/16,%v4:172.16.0.0/12,%v4:!192.168.42.0/23
+  virtual_private=%v4:10.0.0.0/8,%v4:192.168.0.0/16,%v4:172.16.0.0/12,%v4:!10.0.154.0/24
   protostack=netkey
   nhelpers=0
   interfaces=%defaultroute
@@ -118,8 +120,8 @@ cat > /etc/xl2tpd/xl2tpd.conf <<'EOF'
 port = 1701
 
 [lns default]
-ip range = 192.168.42.10-192.168.42.250
-local ip = 192.168.42.1
+ip range = 10.0.154.243-10.0.154.254
+local ip = 10.0.154.3
 require chap = yes
 refuse pap = yes
 require authentication = yes
@@ -180,7 +182,7 @@ iptables -I INPUT 3 -p udp --dport 1701 -j DROP
 iptables -I FORWARD 1 -m conntrack --ctstate INVALID -j DROP
 iptables -I FORWARD 2 -i eth+ -o ppp+ -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 iptables -I FORWARD 3 -i ppp+ -o eth+ -j ACCEPT
-iptables -I FORWARD 4 -i ppp+ -o ppp+ -s 192.168.42.0/24 -d 192.168.42.0/24 -j ACCEPT
+iptables -I FORWARD 4 -i ppp+ -o ppp+ -s 10.0.154.0/24 -d 10.0.154.0/24 -j ACCEPT
 iptables -I FORWARD 5 -i eth+ -d 192.168.43.0/24 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 iptables -I FORWARD 6 -s 192.168.43.0/24 -o eth+ -j ACCEPT
 # Uncomment to DROP traffic between VPN clients themselves
@@ -188,7 +190,7 @@ iptables -I FORWARD 6 -s 192.168.43.0/24 -o eth+ -j ACCEPT
 # iptables -I FORWARD 3 -s 192.168.43.0/24 -d 192.168.43.0/24 -j DROP
 iptables -A FORWARD -j DROP
 iptables -t nat -I POSTROUTING -s 192.168.43.0/24 -o eth+ -m policy --dir out --pol none -j SNAT --to-source "$PRIVATE_IP"
-iptables -t nat -I POSTROUTING -s 192.168.42.0/24 -o eth+ -j SNAT --to-source "$PRIVATE_IP"
+iptables -t nat -I POSTROUTING -s 10.0.154.0/24 -o eth+ -j SNAT --to-source "$PRIVATE_IP"
 
 # Load IPsec NETKEY kernel module
 modprobe af_key
